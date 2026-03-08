@@ -2,14 +2,20 @@
 #include <stdio.h>
 #include <math.h>
 
-#define Nx 8 // интервалы по x
-#define Ny 8 // интервалы по y
-#define L 1.0 // длина кюветы
+#define Nx 256 // интервалы по x
+#define Ny 32 // интервалы по y
+#define L 4.0 // длина кюветы
 #define H 1.0 // выстока кюветы
+#define A_tau 100 // Интенсивность тангенсальные течений
+
+#define x_in 1.5 // Крайняя левая точка открытой полости
+#define x_out 2.5 // Крайняя правая точка открытой полости
+
 
 
 #define _Pr 1.0
 #define _Gr 1e5
+#define _Re 1.0
 #define max_psi_time 500 // макс фиктивное время по пси
 #define psi_eps 1e-7 
 #define Nu_eps 1e-4
@@ -31,6 +37,17 @@ double omega_new[Nx+1][Ny+1];
 double u[Nx+1][Ny+1];
 double v[Nx+1][Ny+1];
 
+
+void save_vectors(const char *filename, double u[Nx+1][Ny+1], double v[Nx+1][Ny+1], double hx, double hy) {
+    FILE *f = fopen(filename, "w");
+    for (int i = 0; i <= Nx; i++) {
+        for (int j = 0; j <= Ny; j++) {
+            // Формат: X  Y  U  V
+            fprintf(f, "%f\t%f\t%f\t%f\n", i * hx, j * hy, u[i][j], v[i][j]);
+        }
+    }
+    fclose(f);
+}
 
 void save_surfer(const char *filename, double data[Nx+1][Ny+1], double hx, double hy){
     FILE *f = fopen(filename, "w");
@@ -219,7 +236,7 @@ void adi_solve_psi(double psi_old[Nx+1][Ny+1], double psi_half[Nx+1][Ny+1], doub
     }
 }
 
-void adi_solve_omega(double omega_old[Nx+1][Ny+1],double omega_half[Nx+1][Ny+1],double omega_new[Nx+1][Ny+1], double T_old[Nx+1][Ny+1], double psi_old[Nx+1][Ny+1], double u[Nx+1][Ny+1], double v[Nx+1][Ny+1], double hx, double hy, double tau, double Pr, double Gr){
+void adi_solve_omega(double omega_old[Nx+1][Ny+1],double omega_half[Nx+1][Ny+1],double omega_new[Nx+1][Ny+1], double T_old[Nx+1][Ny+1], double psi_old[Nx+1][Ny+1], double u[Nx+1][Ny+1], double v[Nx+1][Ny+1], double hx, double hy, double tau, double Re){
 
     // массивы для коэффициентов 
     double ax[Nx+1];
@@ -245,10 +262,10 @@ void adi_solve_omega(double omega_old[Nx+1][Ny+1],double omega_half[Nx+1][Ny+1],
         betta_x[1] = -2.0 * ( psi_old[1][j])/(hx*hx);
 
         for (int i = 1; i < Nx; i++){
-            ax[i] = -u[i][j]*tau/(2.0*hx*2.0) - tau/(2.0*Pr*hx*hx);
-            bx[i] = 1.0 + tau/(Pr*hx*hx);
-            cx[i] = u[i][j]*tau/(2.0*hx*2.0) - tau/(2.0*Pr*hx*hx);
-            dx[i] = omega_old[i][j] + (tau/(2.0*Pr*hy*hy))*(omega_old[i][j-1] - 2.0*omega_old[i][j] + omega_old[i][j+1]) + ((Gr*tau)/(2.0*hx*2.0)) * (T_old[i+1][j]-T_old[i-1][j]) - (v[i][j] * tau / (4.0 * hy)) * (omega_old[i][j+1] - omega_old[i][j-1]);
+            ax[i] = -u[i][j]*tau/(2.0*hx*2.0) - tau/(2.0*Re*hx*hx);
+            bx[i] = 1.0 + tau/(Re*hx*hx);
+            cx[i] = u[i][j]*tau/(2.0*hx*2.0) - tau/(2.0*Re*hx*hx);
+            dx[i] = omega_old[i][j] + (tau/(2.0*Re*hy*hy))*(omega_old[i][j-1] - 2.0*omega_old[i][j] + omega_old[i][j+1])  - (v[i][j] * tau / (4.0 * hy)) * (omega_old[i][j+1] - omega_old[i][j-1]);
 
 
             alpha_x[i+1] = -cx[i] / (ax[i]*alpha_x[i] + bx[i]);
@@ -269,20 +286,30 @@ void adi_solve_omega(double omega_old[Nx+1][Ny+1],double omega_half[Nx+1][Ny+1],
     // Y-sweep:
     for (int i = 1; i < Nx; i++){
 
+        double xi = i * hx;
+
         alpha_y[1] = 0.0;
         betta_y[1] = -2.0*psi_old[i][1]/(hy*hy);
 
         for (int j = 1; j < Ny; j++){
-            ay[j] = -v[i][j] * tau / (2.0*hy*2.0)  - tau/(2.0*Pr*hy*hy);
-            by[j] = 1.0 + tau/(Pr*hy*hy);
-            cy[j] = v[i][j] * tau / (2.0*hy*2.0)  - tau/(2.0*Pr*hy*hy);
-            dy[j] = omega_half[i][j] + tau/(2.0*Pr*hx*hx) * (omega_half[i-1][j] - 2.0*omega_half[i][j] + omega_half[i+1][j]) + tau*Gr/(2.0*hx*2.0) * (T_old[i+1][j] - T_old[i-1][j]) - (u[i][j] * tau / (4.0 * hx)) * (omega_half[i+1][j] - omega_half[i-1][j]);
+            ay[j] = -v[i][j] * tau / (2.0*hy*2.0)  - tau/(2.0*Re*hy*hy);
+            by[j] = 1.0 + tau/(Re*hy*hy);
+            cy[j] = v[i][j] * tau / (2.0*hy*2.0)  - tau/(2.0*Re*hy*hy);
+            dy[j] = omega_half[i][j] + tau/(2.0*Re*hx*hx) * (omega_half[i-1][j] - 2.0*omega_half[i][j] + omega_half[i+1][j])  - (u[i][j] * tau / (4.0 * hx)) * (omega_half[i+1][j] - omega_half[i-1][j]);
 
             alpha_y[j+1] = -cy[j] / (ay[j]*alpha_y[j] + by[j]);
             betta_y[j+1] = (dy[j] - ay[j]*betta_y[j])/(ay[j]*alpha_y[j] + by[j]);
         }
 
-        omega_new[i][Ny] = -2.0 * psi_old[i][Ny-1]/(hy*hy);
+        if(xi >= x_in && xi <= x_out)
+        {
+            omega_new[i][Ny] = -A_tau;
+        }
+        else
+        {
+            omega_new[i][Ny] = -2.0 * psi_old[i][Ny-1]/(hy*hy);
+        }
+
         for (int j = Ny-1; j >= 1; j--){
             omega_new[i][j] = alpha_y[j+1] * omega_new[i][j+1] + betta_y[j+1];
 
@@ -332,7 +359,7 @@ void adi_solve_T(double T_new[Nx+1][Ny+1], double T_half[Nx+1][Ny+1], double T_o
             betta_x[i+1] = (dx[i] - ax[i]*betta_x[i])/(ax[i]*alpha_x[i] + bx[i]);
         }
 
-        T_half[Nx][j] = 1.0; // граница справа!
+        T_half[Nx][j] = 0.0; // граница справа!
         for (int i = Nx-1; i >= 1; i--){
             T_half[i][j] = alpha_x[i+1] * T_half[i+1][j] + betta_x[i+1];
         }
@@ -377,7 +404,7 @@ void adi_solve_T(double T_new[Nx+1][Ny+1], double T_half[Nx+1][Ny+1], double T_o
     for (int j = 0; j <= Ny; j++){
 
         T_new[0][j] = 0.0;
-        T_new[Nx][j] = 1.0;
+        T_new[Nx][j] = 0.0;
 
     }
 
@@ -390,17 +417,12 @@ int main(){
     double tau = (hx*hx)/4.0;
     int max_n = 500000;
     double tau_f = 0.001;
-    double Nu1_curr = 0.0; //справа
-    double Nu1_perv = 0.0;
-    double Nu2_curr = 0.0; // снизу
-    double Nu2_perv = 0.0;
-    double Nu_mid = 0.0;
+    double omega_eps = 1e-8;
 
     //init
     for (int i = 0; i <= Nx; i++){
         double xi = (double) hx * i;
         for (int j = 0; j <= Ny; j++){
-            T_old[i][j] = xi;
             omega_old[i][j] = 0.0;
             psi_old[i][j] = 0.0;
             u[i][j] = 0.0;
@@ -410,10 +432,8 @@ int main(){
 
     for (int n = 1 ; n < max_n ; n++){
 
-        // уравнение температуры
-        adi_solve_T(T_new, T_half, T_old, u,v,hx,hy,tau);
         // уравнение вихря
-        adi_solve_omega(omega_old,omega_half,omega_new, T_old, psi_old, u, v, hx, hy, tau, _Pr, _Gr);
+        adi_solve_omega(omega_old,omega_half,omega_new, T_old, psi_old, u, v, hx, hy, tau, _Re);
         // уравнения тока
         adi_solve_psi(psi_old,psi_half,psi_new,omega_old,tau_f,hx,hy);
 
@@ -425,9 +445,14 @@ int main(){
             }
         }
 
-        Nu1_curr = calculate_Nu(T_new, hx, hy);
-        Nu2_curr = calculate_Nu_bott(T_new, hx, hy);
-        Nu_mid = calculate_Nu_mid(T_new, u, hx, hy);
+
+        double max_diff_omega = 0.0;
+        for (int i = 0; i <= Nx; i++) {
+            for (int j = 0; j <= Ny; j++) {
+                double diff = fabs(omega_new[i][j] - omega_old[i][j]);
+                if (diff > max_diff_omega) max_diff_omega = diff;
+            }
+        }
         
         // обновим массивы
         for (int i = 0; i <= Nx; i++){
@@ -438,31 +463,20 @@ int main(){
             }
         }
 
-        if (n % 100 == 0) printf("Step - %d: Nu1 = %.5lf  Nu2 = %.5lf Nu_mid = %.5lf\n", n , Nu1_curr, Nu2_curr, Nu_mid);
-
-        if (n > 100){
-            double err1 = fabs(Nu1_curr - Nu1_perv);
-            double err2 = fabs(Nu2_curr - Nu2_perv);
-            if (err1 < tau * Nu_eps && err2 < tau * Nu_eps){
-                double max_psi = 0.0;
-                for (int i = 0; i <= Nx; i++){
-                    for (int j =0; j <= Ny; j++){
-                        if (fabs(psi_new[i][j]) > max_psi) max_psi = fabs(psi_new[i][j]);
-                    }
-                }
-                printf("\n--- CONVERGED at step %d ---\n", n);
-                printf("Final Nu1 : %.5lf\n", Nu1_curr);
-                printf("Final Nu2 : %.5lf\n", Nu2_curr);
-                printf("Final Nu_mid : %.5lf\n", Nu_mid);
-                printf("Max Psi   : %.5lf\n", max_psi);
-
-                save_surfer("isotherms.dat", T_new, hx, hy);
-                save_surfer("streamlines.dat", psi_new, hx, hy);
-                break;
-            }
+        if (n % 500 == 0) {
+            printf("Step %d: max_diff_omega = %.2e\n", n, max_diff_omega);
         }
-        Nu1_perv = Nu1_curr;
-        Nu2_perv = Nu2_curr;
+
+
+        if (n > 100 && max_diff_omega < omega_eps) {
+            printf("\n--- CONVERGED at step %d ---\n", n);
+            printf("Final max_diff_omega: %.2e\n", max_diff_omega);
+            
+            save_surfer("streamlines.dat", psi_new, hx, hy);
+            save_surfer("vorticity.dat", omega_new, hx, hy);
+            save_vectors("vectors.dat", u, v, hx, hy);
+            break;
+        }
     }
 
     return 0;
