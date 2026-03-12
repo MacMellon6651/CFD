@@ -2,14 +2,15 @@
 #include <stdio.h>
 #include <math.h>
 
-#define Nx 256 // интервалы по x
-#define Ny 32 // интервалы по y
-#define L 4.0 // длина кюветы
+#define Nx 640 // интервалы по x
+#define Ny 64 // интервалы по y
+#define L 10.0 // длина кюветы
 #define H 1.0 // выстока кюветы
 #define A_tau 100 // Интенсивность тангенсальные течений
-
-#define x_in 1.5 // Крайняя левая точка открытой полости
-#define x_out 2.5 // Крайняя правая точка открытой полости
+#define Mid L/2.0 // центр открытой области
+#define Length 1.0 // длина открытой области
+#define x_in Mid - Length/2.0 // Крайняя левая точка открытой полости
+#define x_out Mid + Length/2.0 // Крайняя правая точка открытой полости
 
 
 
@@ -473,7 +474,7 @@ int main(){
             printf("Final max_diff_omega: %.2e\n", max_diff_omega);
             
             save_surfer("streamlines.dat", psi_new, hx, hy);
-            save_surfer("vorticity.dat", omega_new, hx, hy);
+            save_surfer("vorticity.dat", omega_new, hx, hy);    
             save_vectors("vectors.dat", u, v, hx, hy);
             break;
         }
