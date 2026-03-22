@@ -2,12 +2,12 @@
 #include <stdio.h>
 #include <math.h>
 
-#define Nx 640 // интервалы по x
-#define Ny 64 // интервалы по y
-#define L 10.0 // длина кюветы
+#define Nx 96 // интервалы по x
+#define Ny 32 // интервалы по y
+#define L 3.0 // длина кюветы
 #define H 1.0 // выстока кюветы
 #define A_tau 100 // Интенсивность тангенсальные течений
-#define Mid L/2.0 // центр открытой области
+#define Mid 2.0 // центр открытой области
 #define Length 1.0 // длина открытой области
 #define x_in Mid - Length/2.0 // Крайняя левая точка открытой полости
 #define x_out Mid + Length/2.0 // Крайняя правая точка открытой полости
@@ -44,7 +44,7 @@ void save_vectors(const char *filename, double u[Nx+1][Ny+1], double v[Nx+1][Ny+
     for (int i = 0; i <= Nx; i++) {
         for (int j = 0; j <= Ny; j++) {
             // Формат: X  Y  U  V
-            fprintf(f, "%f\t%f\t%f\t%f\n", i * hx, j * hy, u[i][j], v[i][j]);
+            fprintf(f, "%.12lf\t%.12lf\t%.12lf\t%.12lf\n", i * hx, j * hy, u[i][j], v[i][j]);
         }
     }
     fclose(f);
@@ -475,7 +475,7 @@ int main(){
             
             save_surfer("streamlines.dat", psi_new, hx, hy);
             save_surfer("vorticity.dat", omega_new, hx, hy);    
-            save_vectors("vectors.dat", u, v, hx, hy);
+            save_vectors("vectors6.dat", u, v, hx, hy);
             break;
         }
     }
