@@ -6,7 +6,7 @@
 #define Ny 32 // интервалы по y
 #define L 1.0 // длина кюветы
 #define H 1.0 // выстока кюветы
-#define A_tau 500 // Интенсивность тангенсальные течений
+#define A_tau 500  // Интенсивность тангенсальные течений
 #define Mid 0.5 // центр открытой области
 #define Length 1.0 // длина открытой области
 #define x_in Mid - Length/2.0 // Крайняя левая точка открытой полости
@@ -17,13 +17,13 @@
 #define _Pr 17.0
 #define _Gr 1e5
 #define _Re 1.0
-#define _Ra 74000
-#define _Ma 7800
+#define _Ra 740000  
+#define _Ma 78000  
 #define max_psi_time 500 // макс фиктивное время по пси
-#define psi_eps 1e-7 
+#define psi_eps 1e-8 
 #define Nu_eps 1e-4
-#define Theta0 20
-#define Theta1 21
+#define Theta0 2
+#define Theta1 3
 
 // Глобальные массивы
 double T_old[Nx+1][Ny+1];
@@ -47,7 +47,7 @@ void save_vectors(const char *filename, double u[Nx+1][Ny+1], double v[Nx+1][Ny+
     for (int i = 0; i <= Nx; i++) {
         for (int j = 0; j <= Ny; j++) {
             // Формат: X  Y  U  V
-            fprintf(f, "%.12lf\t%.12lf\t%.12lf\t%.12lf\n", i * hx, j * hy, u[i][j], v[i][j]);
+            fprintf(f, "%.20lf\t%.20lf\t%.20lf\t%.lf\n", i * hx, j * hy, u[i][j], v[i][j]);
         }
     }
     fclose(f);
@@ -269,7 +269,7 @@ void adi_solve_omega(double omega_old[Nx+1][Ny+1],double omega_half[Nx+1][Ny+1],
             ax[i] = -u[i][j]*tau/(2.0*hx*2.0) - tau/(2.0*hx*hx);
             bx[i] = 1.0 + tau/(hx*hx);
             cx[i] = u[i][j]*tau/(2.0*hx*2.0) - tau/(2.0*hx*hx);
-            dx[i] = omega_old[i][j] + (tau/(2.0*hy*hy))*(omega_old[i][j-1] - 2.0*omega_old[i][j] + omega_old[i][j+1])  - (v[i][j] * tau / (4.0 * hy)) * (omega_old[i][j+1] - omega_old[i][j-1]) + tau/2.0 * _Ra/_Pr * 1.0/(2.0 * hx) *(T_old[i+1][j] - T_old[i-1][j]) ;
+            dx[i] = omega_old[i][j] + (tau/(2.0*hy*hy))*(omega_old[i][j-1] - 2.0*omega_old[i][j] + omega_old[i][j+1])  - (v[i][j] * tau / (4.0 * hy)) * (omega_old[i][j+1] - omega_old[i][j-1]) + tau/2.0 * _Ra/_Pr * (T_old[i+1][j] - T_old[i-1][j]) / (2.0 * hx);
 
 
             alpha_x[i+1] = -cx[i] / (ax[i]*alpha_x[i] + bx[i]);
@@ -285,12 +285,7 @@ void adi_solve_omega(double omega_old[Nx+1][Ny+1],double omega_half[Nx+1][Ny+1],
     }
     for (int i = 0; i <= Nx; i++){
             omega_half[i][0] = - 2.0 * psi_old[i][1] / (hy*hy);
-            // if ((hx * i > x_in) && (hx * i < x_out))
-            // {
-                omega_half[i][Ny] = _Ma/_Pr * 1.0/(2.0*hx) * (T_old[i+1][Ny] - T_old[i-1][Ny]) - A_tau;
-            // }
-            // else 
-            // omega_half[i][Ny] = -2.0 * psi_old[i][Ny-1] / (hy*hy);
+            omega_half[i][Ny] = _Ma/_Pr * ((T_old[i+1][Ny] - T_old[i-1][Ny]) / (2.0 * hx)) - A_tau;
     }
     // Y-sweep:
     for (int i = 1; i < Nx; i++){
@@ -304,20 +299,13 @@ void adi_solve_omega(double omega_old[Nx+1][Ny+1],double omega_half[Nx+1][Ny+1],
             ay[j] = -v[i][j] * tau / (2.0*hy*2.0)  - tau/(2.0*hy*hy);
             by[j] = 1.0 + tau/(hy*hy);
             cy[j] = v[i][j] * tau / (2.0*hy*2.0)  - tau/(2.0*hy*hy);
-            dy[j] = omega_half[i][j] + tau/(2.0*hx*hx) * (omega_half[i-1][j] - 2.0*omega_half[i][j] + omega_half[i+1][j])  - (u[i][j] * tau / (4.0 * hx)) * (omega_half[i+1][j] - omega_half[i-1][j]) + tau/2.0 * _Ra/_Pr * 1.0/(2.0 * hx) *(T_old[i+1][j] - T_old[i-1][j]);
+            dy[j] = omega_half[i][j] + tau/(2.0*hx*hx) * (omega_half[i-1][j] - 2.0*omega_half[i][j] + omega_half[i+1][j])  - (u[i][j] * tau / (4.0 * hx)) * (omega_half[i+1][j] - omega_half[i-1][j]);
 
             alpha_y[j+1] = -cy[j] / (ay[j]*alpha_y[j] + by[j]);
             betta_y[j+1] = (dy[j] - ay[j]*betta_y[j])/(ay[j]*alpha_y[j] + by[j]);
         }
 
-        // if(xi >= x_in && xi <= x_out)
-        // {
-            omega_new[i][Ny] = _Ma/_Pr * 1.0/(2.0*hx) * (T_old[i+1][Ny] - T_old[i-1][Ny]) - A_tau;;
-        // }
-        // else
-        // {
-            // omega_new[i][Ny] = -2.0 * psi_old[i][Ny-1]/(hy*hy);
-        //}
+        omega_new[i][Ny] = _Ma/_Pr * ((T_old[i+1][Ny] - T_old[i-1][Ny]) / (2.0 * hx)) - A_tau;
 
         for (int j = Ny-1; j >= 1; j--){
             omega_new[i][j] = alpha_y[j+1] * omega_new[i][j+1] + betta_y[j+1];
@@ -369,7 +357,7 @@ void adi_solve_T(double T_new[Nx+1][Ny+1], double T_half[Nx+1][Ny+1], double T_o
             betta_x[i+1] = (dx[i] - ax[i]*betta_x[i])/(ax[i]*alpha_x[i] + bx[i]);
         }
 
-        T_half[Nx][j] = betta_x[Nx] / (1.0 - alpha_x[Nx]); // граница справа!
+        T_half[Nx][j] = T_half[Nx-1][j];
         for (int i = Nx-1; i >= 1; i--){
             T_half[i][j] = alpha_x[i+1] * T_half[i+1][j] + betta_x[i+1];
         }
@@ -377,9 +365,8 @@ void adi_solve_T(double T_new[Nx+1][Ny+1], double T_half[Nx+1][Ny+1], double T_o
     }
 
     for (int i = 0; i <= Nx; i++){
-
-        T_half[i][0] = Theta0 + hx * i;
-        T_half[i][Ny] = Theta1 + hx * i;
+        T_half[i][0] = Theta0;
+        T_half[i][Ny] = Theta1 + i * hx;
     }
 
     // Y-sweep:
@@ -388,7 +375,7 @@ void adi_solve_T(double T_new[Nx+1][Ny+1], double T_half[Nx+1][Ny+1], double T_o
         double xi = i * hx;
 
         alpha_y[1] = 0.0;
-        betta_y[1] = Theta0 + hx * i;
+        betta_y[1] = Theta0;
 
         for (int j = 1; j < Ny; j++){
 
@@ -403,12 +390,12 @@ void adi_solve_T(double T_new[Nx+1][Ny+1], double T_half[Nx+1][Ny+1], double T_o
             betta_y[j+1] = (dy[j] - ay[j]*betta_y[j])/(ay[j]*alpha_y[j] + by[j]);
 
         }
-        T_new[i][Ny] = Theta1 + hx * i;
+        T_new[i][Ny] = Theta1 + i * hx;
 
         for (int j = Ny-1; j >= 1; j--){
             T_new[i][j] = alpha_y[j+1] * T_new[i][j+1] + betta_y[j+1];
         }
-        T_new[i][0]  = Theta0 + hx * i;
+        T_new[i][0] = Theta0;
     }
 
     for (int j = 0; j <= Ny; j++){
@@ -433,13 +420,16 @@ int main(){
     for (int i = 0; i <= Nx; i++){
         double xi = (double) hx * i;
         for (int j = 0; j <= Ny; j++){
-            T_old[i][j] =  Theta0 + xi + (hy * j / H) * ((Theta1 + xi) - (Theta0 + xi));
+            T_old[i][j] = Theta0 + (hy * j / H) * ((Theta1 + xi) - Theta0);
             omega_old[i][j] = 0.0;
             psi_old[i][j] = 0.0;
             u[i][j] = 0.0;
             v[i][j] = 0.0;
         }
     }
+
+    printf("Starting calculation with Ra = %.0f, Ma = %.0f\n", _Ra, _Ma);
+    printf("Theta0 = %d, Theta1 = %d\n", Theta0, Theta1);
 
     for (int n = 1 ; n < max_n ; n++){
         // уравнение температуры
