@@ -17,13 +17,13 @@
 #define _Pr 17.0
 #define _Gr 1e5
 #define _Re 1.0
-#define _Ra 740000  
-#define _Ma 78000  
+#define _Ra 74000
+#define _Ma 7800  
 #define max_psi_time 500 // макс фиктивное время по пси
 #define psi_eps 1e-8 
 #define Nu_eps 1e-4
-#define Theta0 2
-#define Theta1 3
+#define Theta0 20
+#define Theta1 21
 
 // Глобальные массивы
 double T_old[Nx+1][Ny+1];
@@ -42,12 +42,31 @@ double u[Nx+1][Ny+1];
 double v[Nx+1][Ny+1];
 
 
+void save_isotherms(const char *filename, double data[Nx+1][Ny+1], double hx, double hy) {
+    FILE *f = fopen(filename, "w");
+    if (f == NULL) {
+        printf("Ошибка открытия файла!\n");
+        return;
+    }
+    // Заголовок (необязательно, но полезно)
+    fprintf(f, "x\ty\tT\n");
+
+    for (int i = 0; i <= Nx; i++) {
+        for (int j = 0; j <= Ny; j++) {
+            fprintf(f, "%lf\t%lf\t%lf\n", i * hx, j * hy, data[i][j]);
+        }
+        fprintf(f, "\n"); // Пустая строка для разделения сканов по X
+    }
+    fclose(f);
+    printf("Данные для изотерм сохранены в %s\n", filename);
+}
+
 void save_vectors(const char *filename, double u[Nx+1][Ny+1], double v[Nx+1][Ny+1], double hx, double hy) {
     FILE *f = fopen(filename, "w");
     for (int i = 0; i <= Nx; i++) {
         for (int j = 0; j <= Ny; j++) {
             // Формат: X  Y  U  V
-            fprintf(f, "%.20lf\t%.20lf\t%.20lf\t%.lf\n", i * hx, j * hy, u[i][j], v[i][j]);
+            fprintf(f, "%.20lf\t%.20lf\t%.20lf\t%.20lf\n", i * hx, j * hy, u[i][j], v[i][j]);
         }
     }
     fclose(f);
@@ -242,6 +261,7 @@ void adi_solve_psi(double psi_old[Nx+1][Ny+1], double psi_half[Nx+1][Ny+1], doub
 
 void adi_solve_omega(double omega_old[Nx+1][Ny+1],double omega_half[Nx+1][Ny+1],double omega_new[Nx+1][Ny+1], double T_old[Nx+1][Ny+1], double psi_old[Nx+1][Ny+1], double u[Nx+1][Ny+1], double v[Nx+1][Ny+1], double hx, double hy, double tau, double Re){
 
+    
     // массивы для коэффициентов 
     double ax[Nx+1];
     double bx[Nx+1];
@@ -284,8 +304,11 @@ void adi_solve_omega(double omega_old[Nx+1][Ny+1],double omega_half[Nx+1][Ny+1],
         omega_half[0][j] = - 2.0 * psi_old[1][j] / (hx*hx);
     }
     for (int i = 0; i <= Nx; i++){
+            double A = A_tau ;//* (hx * i);
             omega_half[i][0] = - 2.0 * psi_old[i][1] / (hy*hy);
-            omega_half[i][Ny] = _Ma/_Pr * ((T_old[i+1][Ny] - T_old[i-1][Ny]) / (2.0 * hx)) - A_tau;
+            if (i == 0) omega_half[i][Ny] = _Ma/_Pr * ((T_old[i+1][Ny] - T_old[i][Ny]) / (hx)) - A;
+            if (i == Nx) omega_half[i][Ny] = _Ma/_Pr * ((T_old[i][Ny] - T_old[i-1][Ny]) / (hx)) - A;
+            else omega_half[i][Ny] = _Ma/_Pr * ((T_old[i+1][Ny] - T_old[i-1][Ny]) / (2.0 * hx)) - A;
     }
     // Y-sweep:
     for (int i = 1; i < Nx; i++){
@@ -304,8 +327,11 @@ void adi_solve_omega(double omega_old[Nx+1][Ny+1],double omega_half[Nx+1][Ny+1],
             alpha_y[j+1] = -cy[j] / (ay[j]*alpha_y[j] + by[j]);
             betta_y[j+1] = (dy[j] - ay[j]*betta_y[j])/(ay[j]*alpha_y[j] + by[j]);
         }
+        double A = A_tau ; // * (hx * i);
 
-        omega_new[i][Ny] = _Ma/_Pr * ((T_old[i+1][Ny] - T_old[i-1][Ny]) / (2.0 * hx)) - A_tau;
+        if (i == 0)omega_new[i][Ny] = _Ma/_Pr * ((T_old[i+1][Ny] - T_old[i][Ny]) / (hx)) - A;
+        if (i == Nx) omega_new[i][Ny] = _Ma/_Pr * ((T_old[i][Ny] - T_old[i-1][Ny]) / (hx)) - A;
+        else omega_new[i][Ny] = _Ma/_Pr * ((T_old[i+1][Ny] - T_old[i-1][Ny]) / (2.0 * hx)) - A;
 
         for (int j = Ny-1; j >= 1; j--){
             omega_new[i][j] = alpha_y[j+1] * omega_new[i][j+1] + betta_y[j+1];
@@ -366,7 +392,7 @@ void adi_solve_T(double T_new[Nx+1][Ny+1], double T_half[Nx+1][Ny+1], double T_o
 
     for (int i = 0; i <= Nx; i++){
         T_half[i][0] = Theta0;
-        T_half[i][Ny] = Theta1 + i * hx;
+        T_half[i][Ny] = Theta0 + (Theta1 - Theta0) * (i * hx) / L;;
     }
 
     // Y-sweep:
@@ -390,7 +416,7 @@ void adi_solve_T(double T_new[Nx+1][Ny+1], double T_half[Nx+1][Ny+1], double T_o
             betta_y[j+1] = (dy[j] - ay[j]*betta_y[j])/(ay[j]*alpha_y[j] + by[j]);
 
         }
-        T_new[i][Ny] = Theta1 + i * hx;
+        T_new[i][Ny] = Theta0 + (Theta1 - Theta0) * (i * hx) / L;
 
         for (int j = Ny-1; j >= 1; j--){
             T_new[i][j] = alpha_y[j+1] * T_new[i][j+1] + betta_y[j+1];
@@ -420,7 +446,7 @@ int main(){
     for (int i = 0; i <= Nx; i++){
         double xi = (double) hx * i;
         for (int j = 0; j <= Ny; j++){
-            T_old[i][j] = Theta0 + (hy * j / H) * ((Theta1 + xi) - Theta0);
+            T_old[i][j] = 0.0;
             omega_old[i][j] = 0.0;
             psi_old[i][j] = 0.0;
             u[i][j] = 0.0;
@@ -428,7 +454,7 @@ int main(){
         }
     }
 
-    printf("Starting calculation with Ra = %.0f, Ma = %.0f\n", _Ra, _Ma);
+    printf("Starting calculation with Ra = %.d, Ma = %.d\n", _Ra, _Ma);
     printf("Theta0 = %d, Theta1 = %d\n", Theta0, Theta1);
 
     for (int n = 1 ; n < max_n ; n++){
@@ -477,6 +503,7 @@ int main(){
             save_surfer("streamlines.dat", psi_new, hx, hy);
             save_surfer("vorticity.dat", omega_new, hx, hy);    
             save_vectors("vector.dat", u, v, hx, hy);
+            save_isotherms("isoterm.dat", T_new, hx,  hy );
             break;
         }
     }
